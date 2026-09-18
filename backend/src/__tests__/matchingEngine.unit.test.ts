@@ -2,10 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { findBestMatch, normalizePhone } from '../matchingEngine';
 import { DgiInvoice, FinancialTransaction } from '../types';
 
-// ----------------------------------------------------------------------------
-// Fabriques minimales : seuls les champs utilisés par findBestMatch sont
-// requis dans les scénarios, le reste est complété avec des valeurs neutres.
-// ----------------------------------------------------------------------------
 function makeInvoice(overrides: Partial<DgiInvoice>): DgiInvoice {
   return {
     id: 1,
@@ -14,6 +10,7 @@ function makeInvoice(overrides: Partial<DgiInvoice>): DgiInvoice {
     customer_name: null,
     customer_phone: null,
     amount_ttc: 0,
+    amount_paid_ttc: 0,
     memo_reference: null,
     issued_at: '2026-01-10T09:00:00Z',
     status: 'PENDING',
@@ -71,8 +68,8 @@ describe('findBestMatch — Niveau 1 (Match Parfait, score 100)', () => {
 
     const result = findBestMatch(tx, [invoice]);
 
-    expect(result?.level).not.toBe(1); // pas un match "parfait" : le montant n'est pas exact
-    expect(result?.level).toBe(3); // mais un match flou valide (écart de 0.02%, bien sous les 2%)
+    expect(result?.level).not.toBe(1);
+    expect(result?.level).toBe(3);
   });
 
   it('est prioritaire sur un match de Niveau 2 valide en parallèle', () => {
@@ -105,10 +102,12 @@ describe('findBestMatch — Niveau 2 (Match par ID/Référence, score 90)', () =
     expect(findBestMatch(tx, [invoice])?.level).toBe(2);
   });
 
-  it('ne matche pas si le montant diffère malgré une référence identique', () => {
+  it('ne matche pas si le montant diffère malgré une référence identique, ni les factures/transactions sans téléphone associé au Niveau 4', () => {
     const tx = makeTransaction({ reference_api_momo: 'MOMO-1', net_amount: 100 });
     const invoice = makeInvoice({ memo_reference: 'MOMO-1', amount_ttc: 200 });
 
+    // Ni Niveau 2 (montant différent), ni Niveau 4 (aucun téléphone renseigné
+    // d'un côté ou de l'autre — le Niveau 4 exige toujours un téléphone identique).
     expect(findBestMatch(tx, [invoice])).toBeNull();
   });
 });
@@ -117,14 +116,14 @@ describe('findBestMatch — Niveau 3 (Match Temporel et Financier Flou, score 75
   it('matche avec des frais MoMo de 1.5% et un écart de 3h', () => {
     const tx = makeTransaction({
       sender_phone: '97112233',
-      net_amount: 9850, // 1.5% de frais sur 10000
+      net_amount: 9850,
       processed_at: '2026-01-10T12:00:00Z',
     });
     const invoice = makeInvoice({
       id: 40,
       customer_phone: '97112233',
       amount_ttc: 10000,
-      issued_at: '2026-01-10T09:00:00Z', // +3h
+      issued_at: '2026-01-10T09:00:00Z',
     });
 
     const result = findBestMatch(tx, [invoice]);
@@ -134,29 +133,37 @@ describe('findBestMatch — Niveau 3 (Match Temporel et Financier Flou, score 75
     expect(result?.invoice.id).toBe(40);
   });
 
-  it('rejette un écart de montant supérieur à 2% (ratio < 0.98)', () => {
+  it("un écart de montant supérieur à 2% (ratio < 0.98) bascule en Niveau 4 (paiement partiel), il n'est plus rejeté", () => {
+    // Avant l'introduction du Niveau 4, ce cas était rejeté (null). Désormais,
+    // un paiement à 97% du solde avec le même téléphone est un paiement
+    // partiel légitime, pas une anomalie à écarter.
     const tx = makeTransaction({ sender_phone: '97112233', net_amount: 9700, processed_at: '2026-01-10T12:00:00Z' });
     const invoice = makeInvoice({ customer_phone: '97112233', amount_ttc: 10000, issued_at: '2026-01-10T09:00:00Z' });
 
-    expect(findBestMatch(tx, [invoice])).toBeNull();
+    const result = findBestMatch(tx, [invoice]);
+
+    expect(result?.level).toBe(4);
+    expect(result?.score).toBe(50);
   });
 
-  it('rejette un montant reçu supérieur à la facture (ratio > 1.0)', () => {
+  it('rejette un montant reçu supérieur à la facture (ratio > 1.0), y compris au Niveau 4', () => {
     const tx = makeTransaction({ sender_phone: '97112233', net_amount: 10050, processed_at: '2026-01-10T12:00:00Z' });
     const invoice = makeInvoice({ customer_phone: '97112233', amount_ttc: 10000, issued_at: '2026-01-10T09:00:00Z' });
 
     expect(findBestMatch(tx, [invoice])).toBeNull();
   });
 
-  it('rejette un écart de temps supérieur à ±24h', () => {
-    const tx = makeTransaction({ sender_phone: '97112233', net_amount: 9900, processed_at: '2026-01-12T12:00:00Z' }); // +2 jours
+  it('rejette un écart de temps supérieur à ±24h quand le ratio est proche de 1.0 (hors plage du Niveau 4)', () => {
+    const tx = makeTransaction({ sender_phone: '97112233', net_amount: 9900, processed_at: '2026-01-12T12:00:00Z' });
     const invoice = makeInvoice({ customer_phone: '97112233', amount_ttc: 10000, issued_at: '2026-01-10T09:00:00Z' });
 
+    // ratio 0.99 dépasse le plafond du Niveau 4 (0.98) : reste rejeté même
+    // avec la fenêtre élargie à ±90 jours du Niveau 4.
     expect(findBestMatch(tx, [invoice])).toBeNull();
   });
 
   it('accepte la limite exacte de la fenêtre ±24h', () => {
-    const tx = makeTransaction({ sender_phone: '97112233', net_amount: 9900, processed_at: '2026-01-11T09:00:00Z' }); // exactement +24h
+    const tx = makeTransaction({ sender_phone: '97112233', net_amount: 9900, processed_at: '2026-01-11T09:00:00Z' });
     const invoice = makeInvoice({ customer_phone: '97112233', amount_ttc: 10000, issued_at: '2026-01-10T09:00:00Z' });
 
     expect(findBestMatch(tx, [invoice])?.level).toBe(3);
@@ -165,9 +172,9 @@ describe('findBestMatch — Niveau 3 (Match Temporel et Financier Flou, score 75
   it('choisit le candidat le plus proche en montant quand plusieurs sont éligibles', () => {
     const tx = makeTransaction({ sender_phone: '97112233', net_amount: 9900, processed_at: '2026-01-10T12:00:00Z' });
     const invoices = [
-      makeInvoice({ id: 50, customer_phone: '97112233', amount_ttc: 10100, issued_at: '2026-01-10T09:00:00Z' }), // écart 200, ratio 0.9802 (éligible de justesse)
-      makeInvoice({ id: 51, customer_phone: '97112233', amount_ttc: 10000, issued_at: '2026-01-10T09:00:00Z' }), // écart 100
-      makeInvoice({ id: 52, customer_phone: '97112233', amount_ttc: 9920, issued_at: '2026-01-10T09:00:00Z' }),  // écart 20 -> gagnant
+      makeInvoice({ id: 50, customer_phone: '97112233', amount_ttc: 10100, issued_at: '2026-01-10T09:00:00Z' }),
+      makeInvoice({ id: 51, customer_phone: '97112233', amount_ttc: 10000, issued_at: '2026-01-10T09:00:00Z' }),
+      makeInvoice({ id: 52, customer_phone: '97112233', amount_ttc: 9920, issued_at: '2026-01-10T09:00:00Z' }),
     ];
 
     const result = findBestMatch(tx, invoices);
@@ -176,9 +183,46 @@ describe('findBestMatch — Niveau 3 (Match Temporel et Financier Flou, score 75
     expect(result?.invoice.id).toBe(52);
   });
 
-  it('ignore les factures sans téléphone renseigné', () => {
+  it('ignore les factures sans téléphone renseigné, y compris au Niveau 4', () => {
     const tx = makeTransaction({ sender_phone: '97112233', net_amount: 9900, processed_at: '2026-01-10T12:00:00Z' });
     const invoice = makeInvoice({ customer_phone: null, amount_ttc: 10000, issued_at: '2026-01-10T09:00:00Z' });
+
+    expect(findBestMatch(tx, [invoice])).toBeNull();
+  });
+});
+
+describe('findBestMatch — Niveau 4 (Paiement Partiel, score 50)', () => {
+  it('matche un paiement à 60% du solde avec le même téléphone, hors fenêtre ±24h mais dans ±90 jours', () => {
+    const tx = makeTransaction({ sender_phone: '97112233', net_amount: 6000, processed_at: '2026-02-15T09:00:00Z' });
+    const invoice = makeInvoice({ customer_phone: '97112233', amount_ttc: 10000, issued_at: '2026-01-10T09:00:00Z' });
+
+    const result = findBestMatch(tx, [invoice]);
+
+    expect(result?.level).toBe(4);
+    expect(result?.score).toBe(50);
+  });
+
+  it('tient compte du solde déjà payé, pas du montant total de la facture', () => {
+    const tx = makeTransaction({ sender_phone: '97112233', net_amount: 3000, processed_at: '2026-01-10T09:00:00Z' });
+    // Solde restant réel : 10000 - 7000 = 3000 → match exact, donc Niveau 1.
+    const invoice = makeInvoice({ customer_phone: '97112233', amount_ttc: 10000, amount_paid_ttc: 7000, issued_at: '2026-01-10T09:00:00Z' });
+
+    const result = findBestMatch(tx, [invoice]);
+
+    expect(result?.level).toBe(1);
+    expect(result?.score).toBe(100);
+  });
+
+  it('rejette un paiement en dessous de 5% du solde restant', () => {
+    const tx = makeTransaction({ sender_phone: '97112233', net_amount: 100, processed_at: '2026-01-10T09:00:00Z' });
+    const invoice = makeInvoice({ customer_phone: '97112233', amount_ttc: 10000, issued_at: '2026-01-10T09:00:00Z' });
+
+    expect(findBestMatch(tx, [invoice])).toBeNull();
+  });
+
+  it('rejette une fenêtre temporelle supérieure à ±90 jours', () => {
+    const tx = makeTransaction({ sender_phone: '97112233', net_amount: 5000, processed_at: '2026-05-01T09:00:00Z' });
+    const invoice = makeInvoice({ customer_phone: '97112233', amount_ttc: 10000, issued_at: '2026-01-10T09:00:00Z' });
 
     expect(findBestMatch(tx, [invoice])).toBeNull();
   });

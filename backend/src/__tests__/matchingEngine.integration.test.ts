@@ -1,13 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// ----------------------------------------------------------------------------
-// Mock minimal du pool PostgreSQL, mis à jour pour le scoping multi-tenant.
-//
-// Reconnaît les requêtes émises par matchingEngine.ts : BEGIN/COMMIT/ROLLBACK,
-// les deux SELECT ... FOR UPDATE SKIP LOCKED (scopés tenant_id), les gardes-fous
-// de manualMatch (SELECT status ... WHERE id = $1 AND tenant_id = $2), l'INSERT
-// ON CONFLICT DO NOTHING, et les deux UPDATE de statut (scopés tenant_id).
-// ----------------------------------------------------------------------------
 interface LoggedQuery {
   sql: string;
   params?: unknown[];
@@ -25,6 +17,9 @@ function byTenant(rows: any[], tenantId: number) {
   return rows.filter((r) => r.tenant_id === tenantId);
 }
 
+let matchedInvoicesRegistry: any[] = [];
+let matchedTransactionsRegistry: any[] = [];
+
 const mockClient = {
   query: vi.fn(async (sql: string, params?: unknown[]) => {
     queryLog.push({ sql, params });
@@ -34,7 +29,6 @@ const mockClient = {
       return { rows: [], rowCount: 0 };
     }
 
-    // Garde-fou manualMatch : SELECT status FROM dgi_invoices WHERE id = $1 AND tenant_id = $2
     if (s.includes('SELECT status FROM dgi_invoices')) {
       const [id, tenantId] = params as [number, number];
       const invoice = pendingInvoices.find((i) => i.id === id && i.tenant_id === tenantId)
@@ -54,7 +48,10 @@ const mockClient = {
       return { rows: byTenant(unmatchedTransactions, tenantId), rowCount: unmatchedTransactions.length };
     }
 
-    if (s.includes('FROM dgi_invoices') && s.includes("status = 'PENDING'")) {
+    // fetchPendingInvoices utilise désormais status IN ('PENDING', 'PARTIAL') :
+    // on reconnaît la requête à sa forme générale (dgi_invoices + FOR UPDATE
+    // SKIP LOCKED), pas à la valeur exacte du statut.
+    if (s.includes('FROM dgi_invoices') && s.includes('FOR UPDATE SKIP LOCKED')) {
       const [tenantId] = params as [number];
       return { rows: byTenant(pendingInvoices, tenantId), rowCount: pendingInvoices.length };
     }
@@ -75,10 +72,30 @@ const mockClient = {
       return { rows: [], rowCount: tx ? 1 : 0 };
     }
 
-    if (s.includes("UPDATE dgi_invoices SET status = 'MATCHED'")) {
+    // Match automatique (persistAutomaticMatch) : amount_paid_ttc += net_amount,
+    // statut MATCHED si le solde est soldé, sinon PARTIAL.
+    if (s.includes('UPDATE dgi_invoices') && s.includes('amount_paid_ttc = amount_paid_ttc')) {
+      const [netAmount, id, tenantId] = params as [number, number, number];
+      const inv = pendingInvoices.find((i) => i.id === id && i.tenant_id === tenantId);
+      if (inv) {
+        inv.amount_paid_ttc = (inv.amount_paid_ttc ?? 0) + netAmount;
+        if (inv.amount_paid_ttc >= inv.amount_ttc) {
+          inv.status = 'MATCHED';
+          matchedInvoicesRegistry.push(inv);
+          pendingInvoices = pendingInvoices.filter((i) => i.id !== id);
+        } else {
+          inv.status = 'PARTIAL';
+        }
+      }
+      return { rows: [], rowCount: inv ? 1 : 0 };
+    }
+
+    // Match manuel (persistManualMatch) : solde toujours soldé intégralement.
+    if (s.includes('UPDATE dgi_invoices') && s.includes('amount_paid_ttc = amount_ttc')) {
       const [id, tenantId] = params as [number, number];
       const inv = pendingInvoices.find((i) => i.id === id && i.tenant_id === tenantId);
       if (inv) {
+        inv.amount_paid_ttc = inv.amount_ttc;
         inv.status = 'MATCHED';
         matchedInvoicesRegistry.push(inv);
         pendingInvoices = pendingInvoices.filter((i) => i.id !== id);
@@ -90,11 +107,6 @@ const mockClient = {
   }),
   release: vi.fn(),
 };
-
-// Conserve une trace des lignes déjà rapprochées, pour que le garde-fou de
-// manualMatch puisse détecter "déjà traité" même après retrait du pool actif.
-let matchedInvoicesRegistry: any[] = [];
-let matchedTransactionsRegistry: any[] = [];
 
 vi.mock('../db', () => ({
   pool: {
@@ -124,7 +136,7 @@ describe('runReconciliation — comportement transactionnel et isolation par ten
       { id: 100, tenant_id: TENANT_A, sender_phone: '97001122', net_amount: 5000, reference_api_momo: 'R1', processed_at: '2026-01-10T10:00:00Z', status: 'UNMATCHED' },
     ];
     pendingInvoices = [
-      { id: 1, tenant_id: TENANT_A, customer_phone: '97001122', amount_ttc: 5000, memo_reference: null, issued_at: '2026-01-10T09:00:00Z', status: 'PENDING' },
+      { id: 1, tenant_id: TENANT_A, customer_phone: '97001122', amount_ttc: 5000, amount_paid_ttc: 0, memo_reference: null, issued_at: '2026-01-10T09:00:00Z', status: 'PENDING' },
     ];
 
     const results = await runReconciliation(TENANT_A);
@@ -143,8 +155,7 @@ describe('runReconciliation — comportement transactionnel et isolation par ten
       { id: 100, tenant_id: TENANT_A, sender_phone: '97001122', net_amount: 5000, reference_api_momo: 'R1', processed_at: '2026-01-10T10:00:00Z', status: 'UNMATCHED' },
     ];
     pendingInvoices = [
-      // Même téléphone et même montant, mais tenant différent : ne doit jamais matcher.
-      { id: 1, tenant_id: TENANT_B, customer_phone: '97001122', amount_ttc: 5000, memo_reference: null, issued_at: '2026-01-10T09:00:00Z', status: 'PENDING' },
+      { id: 1, tenant_id: TENANT_B, customer_phone: '97001122', amount_ttc: 5000, amount_paid_ttc: 0, memo_reference: null, issued_at: '2026-01-10T09:00:00Z', status: 'PENDING' },
     ];
 
     const results = await runReconciliation(TENANT_A);
@@ -158,14 +169,14 @@ describe('runReconciliation — comportement transactionnel et isolation par ten
       { id: 101, tenant_id: TENANT_A, sender_phone: '97001122', net_amount: 5000, reference_api_momo: 'R2', processed_at: '2026-01-10T11:00:00Z', status: 'UNMATCHED' },
     ];
     pendingInvoices = [
-      { id: 1, tenant_id: TENANT_A, customer_phone: '97001122', amount_ttc: 5000, memo_reference: null, issued_at: '2026-01-10T09:00:00Z', status: 'PENDING' },
+      { id: 1, tenant_id: TENANT_A, customer_phone: '97001122', amount_ttc: 5000, amount_paid_ttc: 0, memo_reference: null, issued_at: '2026-01-10T09:00:00Z', status: 'PENDING' },
     ];
 
     const results = await runReconciliation(TENANT_A);
 
     expect(results).toHaveLength(1);
     expect(results[0].transaction.id).toBe(100);
-    expect(unmatchedTransactions.some((t) => t.id === 101)).toBe(true); // reste non rapprochée
+    expect(unmatchedTransactions.some((t) => t.id === 101)).toBe(true);
   });
 
   it('effectue un ROLLBACK et propage l\'erreur si la persistance échoue', async () => {
@@ -173,7 +184,7 @@ describe('runReconciliation — comportement transactionnel et isolation par ten
       { id: 100, tenant_id: TENANT_A, sender_phone: '97001122', net_amount: 5000, reference_api_momo: 'R1', processed_at: '2026-01-10T10:00:00Z', status: 'UNMATCHED' },
     ];
     pendingInvoices = [
-      { id: 1, tenant_id: TENANT_A, customer_phone: '97001122', amount_ttc: 5000, memo_reference: null, issued_at: '2026-01-10T09:00:00Z', status: 'PENDING' },
+      { id: 1, tenant_id: TENANT_A, customer_phone: '97001122', amount_ttc: 5000, amount_paid_ttc: 0, memo_reference: null, issued_at: '2026-01-10T09:00:00Z', status: 'PENDING' },
     ];
     failOnInsert = true;
 
@@ -187,17 +198,19 @@ describe('runReconciliation — comportement transactionnel et isolation par ten
 
 describe('manualMatch — garde-fous multi-tenant', () => {
   it('lie une facture et une transaction du même tenant', async () => {
-    pendingInvoices = [{ id: 7, tenant_id: TENANT_A, status: 'PENDING' }];
+    pendingInvoices = [{ id: 7, tenant_id: TENANT_A, status: 'PENDING', amount_ttc: 5000, amount_paid_ttc: 0 }];
     unmatchedTransactions = [{ id: 42, tenant_id: TENANT_A, status: 'UNMATCHED' }];
 
     await manualMatch(TENANT_A, 7, 42);
 
     const insertCall = queryLog.find((q) => q.sql.includes('INSERT INTO reconciliation_matches'));
-    expect(insertCall?.params).toEqual([TENANT_A, 7, 42, 100, 'MANUAL_USER']);
+    // Le score (100) et matched_by ('MANUAL_USER') sont désormais écrits en
+    // dur dans le SQL, plus dans les paramètres liés.
+    expect(insertCall?.params).toEqual([TENANT_A, 7, 42]);
   });
 
   it("refuse de lier une facture appartenant à un autre tenant", async () => {
-    pendingInvoices = [{ id: 7, tenant_id: TENANT_B, status: 'PENDING' }]; // appartient à B
+    pendingInvoices = [{ id: 7, tenant_id: TENANT_B, status: 'PENDING' }];
     unmatchedTransactions = [{ id: 42, tenant_id: TENANT_A, status: 'UNMATCHED' }];
 
     await expect(manualMatch(TENANT_A, 7, 42)).rejects.toThrow(/n'appartenant pas à ce compte/);
@@ -208,13 +221,13 @@ describe('manualMatch — garde-fous multi-tenant', () => {
   });
 
   it('refuse de lier une facture déjà rapprochée', async () => {
-    pendingInvoices = [{ id: 7, tenant_id: TENANT_A, status: 'MATCHED' }]; // déjà traitée
+    pendingInvoices = [{ id: 7, tenant_id: TENANT_A, status: 'MATCHED' }];
 
     await expect(manualMatch(TENANT_A, 7, 42)).rejects.toThrow(/déjà traitée|introuvable/);
   });
 
   it('effectue un ROLLBACK si la persistance échoue après les vérifications', async () => {
-    pendingInvoices = [{ id: 7, tenant_id: TENANT_A, status: 'PENDING' }];
+    pendingInvoices = [{ id: 7, tenant_id: TENANT_A, status: 'PENDING', amount_ttc: 5000, amount_paid_ttc: 0 }];
     unmatchedTransactions = [{ id: 42, tenant_id: TENANT_A, status: 'UNMATCHED' }];
     failOnInsert = true;
 

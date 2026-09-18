@@ -36,7 +36,7 @@ const TARGET_DB = process.argv[2] || process.env.PGDATABASE || 'ifiwera';
 
 // backend/scripts/migrate.js -> ../.. -> racine du projet -> /sql
 const MIGRATIONS_DIR = path.join(__dirname, '..', '..', 'sql');
-const MIGRATION_FILES = ['001_schema.sql', '002_auth_multitenant.sql'];
+const MIGRATION_FILES = ['001_schema.sql', '002_auth_multitenant.sql', '003_partial_payments.sql'];
 
 async function ensureDatabaseExists() {
   const admin = new Client({ host: HOST, port: PORT, user: USER, password: PASSWORD, database: 'postgres' });

@@ -25,6 +25,7 @@ import {
   ParseIssue,
 } from './lib/fileParsers';
 import { apiFetch } from './lib/api';
+import { Link } from 'react-router-dom';
 
 // ----------------------------------------------------------------------------
 // Types locaux
@@ -263,11 +264,11 @@ export default function ImportWorkspace() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0F1B1A] text-[#E9EDE9] font-sans">
+    <div className="min-h-screen bg-[#1A2422] text-[#E4E7E2] font-sans">
       <div className="max-w-6xl mx-auto px-6 py-8">
         <header className="mb-8">
-          <h1 className="text-2xl font-semibold tracking-tight text-[#F4F1EA]">Import des paiements et factures</h1>
-          <p className="text-sm text-[#8FA39B] mt-1">
+          <h1 className="text-2xl font-semibold tracking-tight text-[#F0EDE6]">Import des paiements et factures</h1>
+          <p className="text-sm text-[#9FB0A9] mt-1">
             Déposez vos factures certifiées et vos relevés de paiement. Ifiwera se charge du rapprochement.
           </p>
         </header>
@@ -306,16 +307,16 @@ export default function ImportWorkspace() {
 
         {/* Bilan de préparation */}
         {(invoiceFiles.length > 0 || transactionFiles.length > 0) && phase === 'staging' && (
-          <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-lg border border-[#243532] bg-[#131E1C] px-5 py-4">
-            <div className="text-sm text-[#8FA39B]">
-              <span className="text-[#F4F1EA] font-medium">{readyInvoiceRows.length}</span> facture(s) et{' '}
-              <span className="text-[#F4F1EA] font-medium">{readyTransactionRows.length}</span> transaction(s) prêtes à
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-lg border border-[#2E3F3C] bg-[#202B29] px-5 py-4">
+            <div className="text-sm text-[#9FB0A9]">
+              <span className="text-[#F0EDE6] font-medium">{readyInvoiceRows.length}</span> facture(s) et{' '}
+              <span className="text-[#F0EDE6] font-medium">{readyTransactionRows.length}</span> transaction(s) prêtes à
               être importées.
             </div>
             <button
               onClick={handleImport}
               disabled={!canImport}
-              className="inline-flex items-center gap-2 rounded-md bg-[#C9A24B] px-4 py-2 text-sm font-medium text-[#0F1B1A] hover:bg-[#DCB65E] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="inline-flex items-center gap-2 rounded-md bg-[#C9A24B] px-4 py-2 text-sm font-medium text-[#1A2422] hover:bg-[#DCB65E] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               <UploadCloud size={16} />
               Importer ces fichiers
@@ -324,7 +325,7 @@ export default function ImportWorkspace() {
         )}
 
         {phase === 'importing' && (
-          <div className="mt-6 flex items-center gap-3 rounded-lg border border-[#243532] bg-[#131E1C] px-5 py-4 text-sm text-[#8FA39B]">
+          <div className="mt-6 flex items-center gap-3 rounded-lg border border-[#2E3F3C] bg-[#202B29] px-5 py-4 text-sm text-[#9FB0A9]">
             <Loader2 size={16} className="animate-spin text-[#C9A24B]" />
             Import en cours…
           </div>
@@ -332,21 +333,21 @@ export default function ImportWorkspace() {
 
         {/* Résumé d'import + bouton de réconciliation */}
         {(phase === 'imported' || phase === 'reconciling' || phase === 'done') && importSummary && (
-          <div className="mt-6 rounded-lg border border-[#243532] bg-[#131E1C] px-5 py-5">
+          <div className="mt-6 rounded-lg border border-[#2E3F3C] bg-[#202B29] px-5 py-5">
             <div className="flex items-center gap-2 text-[#4FBF9F] text-sm font-medium mb-3">
               <CheckCircle2 size={16} />
               Import terminé
             </div>
-            <div className="grid grid-cols-2 gap-4 text-sm text-[#8FA39B] mb-5">
+            <div className="grid grid-cols-2 gap-4 text-sm text-[#9FB0A9] mb-5">
               <div>
-                <span className="text-[#F4F1EA] font-semibold">{importSummary.invoicesInserted}</span> facture(s)
+                <span className="text-[#F0EDE6] font-semibold">{importSummary.invoicesInserted}</span> facture(s)
                 ajoutée(s)
                 {importSummary.invoicesSkipped > 0 && (
                   <span className="block text-xs mt-0.5">{importSummary.invoicesSkipped} doublon(s) ignoré(s)</span>
                 )}
               </div>
               <div>
-                <span className="text-[#F4F1EA] font-semibold">{importSummary.transactionsInserted}</span>{' '}
+                <span className="text-[#F0EDE6] font-semibold">{importSummary.transactionsInserted}</span>{' '}
                 transaction(s) ajoutée(s)
                 {importSummary.transactionsSkipped > 0 && (
                   <span className="block text-xs mt-0.5">{importSummary.transactionsSkipped} doublon(s) ignoré(s)</span>
@@ -358,7 +359,7 @@ export default function ImportWorkspace() {
               <button
                 onClick={handleRunReconciliation}
                 disabled={phase === 'reconciling'}
-                className="inline-flex items-center gap-2 rounded-md bg-[#4FBF9F] px-4 py-2 text-sm font-medium text-[#0F1B1A] hover:bg-[#63D4B3] disabled:opacity-50 transition-colors"
+                className="inline-flex items-center gap-2 rounded-md bg-[#4FBF9F] px-4 py-2 text-sm font-medium text-[#1A2422] hover:bg-[#63D4B3] disabled:opacity-50 transition-colors"
               >
                 {phase === 'reconciling' ? (
                   <>
@@ -372,21 +373,21 @@ export default function ImportWorkspace() {
               </button>
             ) : (
               reconciliationSummary && (
-                <div className="flex flex-wrap items-center justify-between gap-4 rounded-md border border-[#345048] bg-[#16211F] px-4 py-3">
+                <div className="flex flex-wrap items-center justify-between gap-4 rounded-md border border-[#3D5751] bg-[#212C2A] px-4 py-3">
                   <div className="text-sm">
                     <span className="text-[#4FBF9F] font-semibold">{reconciliationSummary.matched_count}</span>{' '}
-                    <span className="text-[#8FA39B]">correspondance(s) trouvée(s) automatiquement.</span>
+                    <span className="text-[#9FB0A9]">correspondance(s) trouvée(s) automatiquement.</span>
                   </div>
                   <div className="flex items-center gap-3">
-                    <a
-                      href="/anomalies"
+                    <Link
+                      to="/anomalies"
                       className="inline-flex items-center gap-1 text-sm text-[#C9A24B] hover:text-[#DCB65E] transition-colors"
                     >
                       Voir les suspens restants <ChevronRight size={14} />
-                    </a>
+                    </Link>
                     <button
                       onClick={handleStartOver}
-                      className="text-sm text-[#8FA39B] hover:text-[#E9EDE9] transition-colors"
+                      className="text-sm text-[#9FB0A9] hover:text-[#E4E7E2] transition-colors"
                     >
                       Nouvel import
                     </button>
@@ -429,10 +430,10 @@ function DropZone({
   const accentColor = accent === 'gold' ? '#C9A24B' : '#4FBF9F';
 
   return (
-    <div className="rounded-lg border border-[#243532] bg-[#131E1C] overflow-hidden">
-      <div className="px-5 py-4 border-b border-[#243532]">
-        <h2 className="text-sm font-semibold text-[#F4F1EA]">{title}</h2>
-        <p className="text-xs text-[#8FA39B] mt-0.5">{subtitle}</p>
+    <div className="rounded-lg border border-[#2E3F3C] bg-[#202B29] overflow-hidden">
+      <div className="px-5 py-4 border-b border-[#2E3F3C]">
+        <h2 className="text-sm font-semibold text-[#F0EDE6]">{title}</h2>
+        <p className="text-xs text-[#9FB0A9] mt-0.5">{subtitle}</p>
       </div>
 
       <div className="p-5">
@@ -449,16 +450,16 @@ function DropZone({
           }}
           className={`flex flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed px-4 py-8 text-center cursor-pointer transition-colors ${
             disabled
-              ? 'opacity-40 cursor-not-allowed border-[#243532]'
+              ? 'opacity-40 cursor-not-allowed border-[#2E3F3C]'
               : dragging
-              ? 'border-[--accent] bg-[#16211F]'
-              : 'border-[#345048] hover:border-[#4A6960] hover:bg-[#16211F]'
+              ? 'border-[--accent] bg-[#212C2A]'
+              : 'border-[#3D5751] hover:border-[#4A6960] hover:bg-[#212C2A]'
           }`}
           style={{ ['--accent' as string]: accentColor }}
         >
-          <UploadCloud size={22} style={{ color: dragging ? accentColor : '#8FA39B' }} />
-          <span className="text-sm text-[#E9EDE9]">Glissez-déposez vos fichiers ici</span>
-          <span className="text-xs text-[#5E736C]">ou cliquez pour parcourir — CSV, JSON, Excel (.xlsx)</span>
+          <UploadCloud size={22} style={{ color: dragging ? accentColor : '#9FB0A9' }} />
+          <span className="text-sm text-[#E4E7E2]">Glissez-déposez vos fichiers ici</span>
+          <span className="text-xs text-[#6B7D77]">ou cliquez pour parcourir — CSV, JSON, Excel (.xlsx)</span>
           <input
             ref={inputRef}
             type="file"
@@ -499,14 +500,14 @@ function FileRow({
   const Icon = file.fileName.endsWith('.json') ? FileText : FileSpreadsheet;
 
   return (
-    <li className="rounded-md bg-[#16211F] border border-[#243532] px-3 py-2.5">
+    <li className="rounded-md bg-[#212C2A] border border-[#2E3F3C] px-3 py-2.5">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          <Icon size={14} className="text-[#8FA39B] shrink-0" />
-          <span className="text-sm text-[#E9EDE9] truncate">{file.fileName}</span>
+          <Icon size={14} className="text-[#9FB0A9] shrink-0" />
+          <span className="text-sm text-[#E4E7E2] truncate">{file.fileName}</span>
         </div>
         {!disabled && (
-          <button onClick={() => onRemove(file.id)} className="text-[#5E736C] hover:text-[#E9EDE9] shrink-0">
+          <button onClick={() => onRemove(file.id)} className="text-[#6B7D77] hover:text-[#E4E7E2] shrink-0">
             <X size={14} />
           </button>
         )}
@@ -514,7 +515,7 @@ function FileRow({
 
       <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs">
         {file.status === 'parsing' && (
-          <span className="inline-flex items-center gap-1 text-[#8FA39B]">
+          <span className="inline-flex items-center gap-1 text-[#9FB0A9]">
             <Loader2 size={12} className="animate-spin" /> Analyse…
           </span>
         )}
@@ -534,7 +535,7 @@ function FileRow({
           </span>
         )}
         {file.issues.length > 0 && (
-          <span className="text-[#8FA39B]">· {file.issues.length} ligne(s) ignorée(s)</span>
+          <span className="text-[#9FB0A9]">· {file.issues.length} ligne(s) ignorée(s)</span>
         )}
       </div>
 
@@ -544,7 +545,7 @@ function FileRow({
             value={file.channel}
             disabled={disabled}
             onChange={(e) => onChangeChannel(file.id, e.target.value as SourceChannel)}
-            className="w-full rounded bg-[#1B2A27] border border-[#345048] px-2 py-1.5 text-xs text-[#E9EDE9]"
+            className="w-full rounded bg-[#263531] border border-[#3D5751] px-2 py-1.5 text-xs text-[#E4E7E2]"
           >
             {(Object.keys(SOURCE_LABELS) as SourceChannel[]).map((c) => (
               <option key={c} value={c}>

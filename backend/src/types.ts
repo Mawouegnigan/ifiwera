@@ -26,6 +26,7 @@ export interface DgiInvoice {
   customer_name: string | null;
   customer_phone: string | null;
   amount_ttc: number;
+  amount_paid_ttc: number;
   memo_reference: string | null;
   issued_at: string; // ISO timestamp
   status: InvoiceStatus;
@@ -59,7 +60,7 @@ export interface MatchResult {
   transaction: FinancialTransaction;
   invoice: DgiInvoice;
   score: number;
-  level: 1 | 2 | 3;
+  level: 1 | 2 | 3 | 4;
 }
 
 export interface ReconciliationSummary {
@@ -71,4 +72,33 @@ export interface ReconciliationSummary {
   unmatched_transactions_count: number;
   unmatched_invoices_count: number;
   discrepancy_amount_fcfa: number;
+}
+
+export interface LevelBreakdownRow {
+  level: 1 | 2 | 3 | 4;
+  score: number;
+  count: number;
+}
+
+export interface ChannelBreakdownRow {
+  channel: SourceChannel;
+  matched_count: number;
+  unmatched_count: number;
+  matched_amount_fcfa: number;
+}
+
+export interface DailyMatchRow {
+  day: string; // 'YYYY-MM-DD'
+  matched_count: number;
+  matched_amount_fcfa: number;
+}
+
+export interface ReconciliationAnalytics {
+  levelBreakdown: LevelBreakdownRow[];
+  channelBreakdown: ChannelBreakdownRow[];
+  timeSeries: DailyMatchRow[];
+  partialInvoices: {
+    count: number;
+    outstanding_fcfa: number;
+  };
 }

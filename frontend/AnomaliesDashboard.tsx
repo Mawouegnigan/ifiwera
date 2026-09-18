@@ -116,11 +116,11 @@ export default function AnomaliesDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0F1B1A] text-[#E9EDE9] font-sans">
+    <div className="min-h-screen bg-[#1A2422] text-[#E4E7E2] font-sans">
       <div className="max-w-6xl mx-auto px-6 py-8">
         <header className="mb-8">
-          <h1 className="text-2xl font-semibold tracking-tight text-[#F4F1EA]">Suspens de réconciliation</h1>
-          <p className="text-sm text-[#8FA39B] mt-1">
+          <h1 className="text-2xl font-semibold tracking-tight text-[#F0EDE6]">Suspens de réconciliation</h1>
+          <p className="text-sm text-[#9FB0A9] mt-1">
             Traitez manuellement les paiements et factures qui n'ont pas trouvé de correspondance automatique.
           </p>
         </header>
@@ -130,17 +130,17 @@ export default function AnomaliesDashboard() {
 
         {/* Zone de liaison sélectionnée */}
         {canLink && (
-          <div className="mt-6 flex items-center justify-between gap-4 rounded-lg border border-[#C9A24B] bg-[#1B2A27] px-5 py-4">
+          <div className="mt-6 flex items-center justify-between gap-4 rounded-lg border border-[#C9A24B] bg-[#263531] px-5 py-4">
             <div className="flex items-center gap-4 text-sm">
               <span className="text-[#C9A24B] font-medium">Prêt à lier :</span>
               <span>{selectedPair.tx?.sender_name || selectedPair.tx?.sender_phone}</span>
-              <ArrowRightLeft size={16} className="text-[#8FA39B]" />
+              <ArrowRightLeft size={16} className="text-[#9FB0A9]" />
               <span>{selectedPair.inv?.customer_name || selectedPair.inv?.invoice_uid}</span>
             </div>
             <button
               onClick={handleManualLink}
               disabled={linking}
-              className="inline-flex items-center gap-2 rounded-md bg-[#C9A24B] px-4 py-2 text-sm font-medium text-[#0F1B1A] hover:bg-[#DCB65E] disabled:opacity-50 transition-colors"
+              className="inline-flex items-center gap-2 rounded-md bg-[#C9A24B] px-4 py-2 text-sm font-medium text-[#1A2422] hover:bg-[#DCB65E] disabled:opacity-50 transition-colors"
             >
               <Link2 size={16} />
               {linking ? 'Liaison en cours…' : 'Lier manuellement'}
@@ -185,7 +185,7 @@ export default function AnomaliesDashboard() {
       </div>
 
       {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 rounded-md bg-[#1B2A27] border border-[#345048] px-4 py-2 text-sm text-[#E9EDE9] shadow-lg">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 rounded-md bg-[#263531] border border-[#3D5751] px-4 py-2 text-sm text-[#E4E7E2] shadow-lg">
           {toast}
         </div>
       )}
@@ -198,10 +198,10 @@ export default function AnomaliesDashboard() {
 // ----------------------------------------------------------------------------
 function SummaryBar({ summary, loading }: { summary: Summary | null; loading: boolean }) {
   if (loading || !summary) {
-    return <div className="h-20 rounded-lg bg-[#16211F] animate-pulse" />;
+    return <div className="h-20 rounded-lg bg-[#212C2A] animate-pulse" />;
   }
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-px rounded-lg overflow-hidden border border-[#243532]">
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-px rounded-lg overflow-hidden border border-[#2E3F3C]">
       <Stat label="Lignes rapprochées" value={`${summary.matched_count}`} sub={`${summary.matched_percentage}%`} />
       <Stat label="Montant rapproché" value={formatFcfa(summary.matched_amount_fcfa)} />
       <Stat label="Transactions en suspens" value={`${summary.unmatched_transactions_count}`} tone="warn" />
@@ -212,10 +212,10 @@ function SummaryBar({ summary, loading }: { summary: Summary | null; loading: bo
 
 function Stat({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: 'warn' }) {
   return (
-    <div className="bg-[#16211F] px-5 py-4">
-      <div className="text-xs text-[#8FA39B]">{label}</div>
-      <div className={`mt-1 text-lg font-semibold ${tone === 'warn' ? 'text-[#C9A24B]' : 'text-[#F4F1EA]'}`}>
-        {value} {sub && <span className="text-sm font-normal text-[#8FA39B]">({sub})</span>}
+    <div className="bg-[#212C2A] px-5 py-4">
+      <div className="text-xs text-[#9FB0A9]">{label}</div>
+      <div className={`mt-1 text-lg font-semibold ${tone === 'warn' ? 'text-[#C9A24B]' : 'text-[#F0EDE6]'}`}>
+        {value} {sub && <span className="text-sm font-normal text-[#9FB0A9]">({sub})</span>}
       </div>
     </div>
   );
@@ -235,17 +235,17 @@ function Column({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-[#243532] bg-[#131E1C]">
-      <div className="px-5 py-4 border-b border-[#243532] flex items-center justify-between">
+    <div className="rounded-lg border border-[#2E3F3C] bg-[#202B29]">
+      <div className="px-5 py-4 border-b border-[#2E3F3C] flex items-center justify-between">
         <div>
-          <h2 className="text-sm font-semibold text-[#F4F1EA]">{title}</h2>
-          <p className="text-xs text-[#8FA39B] mt-0.5">{subtitle}</p>
+          <h2 className="text-sm font-semibold text-[#F0EDE6]">{title}</h2>
+          <p className="text-xs text-[#9FB0A9] mt-0.5">{subtitle}</p>
         </div>
-        <span className="text-xs rounded-full bg-[#1B2A27] px-2.5 py-1 text-[#8FA39B]">{count}</span>
+        <span className="text-xs rounded-full bg-[#263531] px-2.5 py-1 text-[#9FB0A9]">{count}</span>
       </div>
       <div className="max-h-[60vh] overflow-y-auto divide-y divide-[#1E2E2B]">
         {count === 0 ? (
-          <div className="px-5 py-8 text-center text-sm text-[#5E736C]">{emptyLabel}</div>
+          <div className="px-5 py-8 text-center text-sm text-[#6B7D77]">{emptyLabel}</div>
         ) : (
           children
         )}
@@ -271,11 +271,11 @@ function TransactionCard({
       }`}
     >
       <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-[#F4F1EA]">{tx.sender_name || 'Émetteur inconnu'}</span>
+        <span className="text-sm font-medium text-[#F0EDE6]">{tx.sender_name || 'Émetteur inconnu'}</span>
         <span className="text-sm font-semibold text-[#4FBF9F]">{formatFcfa(tx.net_amount)}</span>
       </div>
-      <div className="mt-1.5 flex items-center gap-3 text-xs text-[#8FA39B]">
-        <span className="rounded bg-[#1B2A27] px-1.5 py-0.5">{SOURCE_LABELS[tx.source_channel] || tx.source_channel}</span>
+      <div className="mt-1.5 flex items-center gap-3 text-xs text-[#9FB0A9]">
+        <span className="rounded bg-[#263531] px-1.5 py-0.5">{SOURCE_LABELS[tx.source_channel] || tx.source_channel}</span>
         {tx.sender_phone && (
           <span className="inline-flex items-center gap-1">
             <Phone size={12} /> {tx.sender_phone}
@@ -311,11 +311,11 @@ function InvoiceCard({
       }`}
     >
       <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-[#F4F1EA]">{inv.customer_name || inv.invoice_uid}</span>
+        <span className="text-sm font-medium text-[#F0EDE6]">{inv.customer_name || inv.invoice_uid}</span>
         <span className="text-sm font-semibold text-[#C9A24B]">{formatFcfa(inv.amount_ttc)}</span>
       </div>
-      <div className="mt-1.5 flex items-center gap-3 text-xs text-[#8FA39B]">
-        <span className="rounded bg-[#1B2A27] px-1.5 py-0.5">{inv.invoice_uid}</span>
+      <div className="mt-1.5 flex items-center gap-3 text-xs text-[#9FB0A9]">
+        <span className="rounded bg-[#263531] px-1.5 py-0.5">{inv.invoice_uid}</span>
         {inv.customer_phone && (
           <span className="inline-flex items-center gap-1">
             <Phone size={12} /> {inv.customer_phone}

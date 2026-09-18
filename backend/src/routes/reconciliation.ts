@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { pool } from '../db';
 import { runReconciliation, manualMatch } from '../matchingEngine';
-import { ReconciliationSummary } from '../types';
+import { ReconciliationSummary, ReconciliationAnalytics } from '../types';
 
 export const reconciliationRouter = Router();
 
@@ -202,12 +202,95 @@ reconciliationRouter.get('/reconciliation/orphans', async (req: Request, res: Re
         [tenantId]
       ),
       pool.query(
-        `SELECT * FROM dgi_invoices WHERE tenant_id = $1 AND status = 'PENDING' ORDER BY issued_at DESC`,
+        `SELECT * FROM dgi_invoices WHERE tenant_id = $1 AND status IN ('PENDING','PARTIAL') ORDER BY issued_at DESC`,
         [tenantId]
       ),
     ]);
     res.json({ orphanTransactions: transactions.rows, unpaidInvoices: invoices.rows });
   } catch (err) {
     res.status(500).json({ error: 'Échec du chargement des anomalies.', details: (err as Error).message });
+  }
+});
+
+// ----------------------------------------------------------------------------
+// GET /api/reconciliation/analytics
+// Alimente le Dashboard Recharts : répartition par niveau de matching,
+// répartition par canal de paiement, série temporelle des 30 derniers jours,
+// et l'encours des factures partiellement payées. Le tout scopé au tenant courant.
+// ----------------------------------------------------------------------------
+const LEVEL_BY_SCORE: Record<number, 1 | 2 | 3 | 4> = { 100: 1, 90: 2, 75: 3, 50: 4 };
+
+reconciliationRouter.get('/reconciliation/analytics', async (req: Request, res: Response) => {
+  const { tenantId } = req.auth!;
+  try {
+    const [levelRes, channelRes, timeSeriesRes, partialRes] = await Promise.all([
+      pool.query(
+        `SELECT match_score, COUNT(*) AS count
+         FROM reconciliation_matches
+         WHERE tenant_id = $1
+         GROUP BY match_score
+         ORDER BY match_score DESC`,
+        [tenantId]
+      ),
+      pool.query(
+        `SELECT
+           source_channel,
+           COUNT(*) FILTER (WHERE status = 'MATCHED') AS matched_count,
+           COUNT(*) FILTER (WHERE status = 'UNMATCHED') AS unmatched_count,
+           COALESCE(SUM(net_amount) FILTER (WHERE status = 'MATCHED'), 0) AS matched_amount_fcfa
+         FROM financial_transactions
+         WHERE tenant_id = $1
+         GROUP BY source_channel
+         ORDER BY source_channel`,
+        [tenantId]
+      ),
+      pool.query(
+        `SELECT
+           DATE(rm.matched_at) AS day,
+           COUNT(*) AS matched_count,
+           COALESCE(SUM(ft.net_amount), 0) AS matched_amount_fcfa
+         FROM reconciliation_matches rm
+         JOIN financial_transactions ft ON ft.id = rm.transaction_id
+         WHERE rm.tenant_id = $1 AND rm.matched_at >= now() - interval '30 days'
+         GROUP BY DATE(rm.matched_at)
+         ORDER BY day ASC`,
+        [tenantId]
+      ),
+      pool.query(
+        `SELECT
+           COUNT(*) AS count,
+           COALESCE(SUM(amount_ttc - amount_paid_ttc), 0) AS outstanding_fcfa
+         FROM dgi_invoices
+         WHERE tenant_id = $1 AND status = 'PARTIAL'`,
+        [tenantId]
+      ),
+    ]);
+
+    const analytics: ReconciliationAnalytics = {
+      levelBreakdown: levelRes.rows.map((r) => ({
+        level: LEVEL_BY_SCORE[Number(r.match_score)] ?? 0,
+        score: Number(r.match_score),
+        count: Number(r.count),
+      })),
+      channelBreakdown: channelRes.rows.map((r) => ({
+        channel: r.source_channel,
+        matched_count: Number(r.matched_count),
+        unmatched_count: Number(r.unmatched_count),
+        matched_amount_fcfa: Number(r.matched_amount_fcfa),
+      })),
+      timeSeries: timeSeriesRes.rows.map((r) => ({
+        day: r.day instanceof Date ? r.day.toISOString().slice(0, 10) : r.day,
+        matched_count: Number(r.matched_count),
+        matched_amount_fcfa: Number(r.matched_amount_fcfa),
+      })),
+      partialInvoices: {
+        count: Number(partialRes.rows[0].count),
+        outstanding_fcfa: Number(partialRes.rows[0].outstanding_fcfa),
+      },
+    };
+
+    res.json(analytics);
+  } catch (err) {
+    res.status(500).json({ error: 'Échec du calcul des statistiques.', details: (err as Error).message });
   }
 });
