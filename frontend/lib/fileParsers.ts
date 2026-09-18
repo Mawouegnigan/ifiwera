@@ -458,3 +458,106 @@ export async function parseTransactionsExcel(
   const lines = await readWorkbookRows(input);
   return buildTransactionsFromRows(lines, defaultChannel);
 }
+
+
+// ----------------------------------------------------------------------------
+// PDF (relevés MTN MoMo / Moov Money) via pdfjs-dist
+//
+// AVERTISSEMENT — IMPLÉMENTATION PROVISOIRE :
+// Les relevés MTN MoMo sont des PDF texte (générés numériquement, pas des
+// scans) — confirmé sur des exemples publics (Ghana, Rwanda) et sur le
+// mécanisme MTN Bénin (portail MyMTN Web : "le PDF est envoyé par e-mail").
+// Le format exact ligne par ligne utilisé au Bénin n'a pas encore été vérifié
+// sur un vrai relevé. Le parseur ci-dessous reconnaît la structure commune
+// observée sur ces marchés (date, heure, téléphone, montant signé, ID de
+// transaction, solde) via une expression régulière tolérante.
+// À AJUSTER dès qu'un relevé béninois réel est disponible pour test — les
+// lignes non reconnues remontent dans `issues` pour permettre le diagnostic
+// plutôt que d'échouer silencieusement.
+//
+// Choix assumé : seules les lignes à montant POSITIF (argent reçu, ex.
+// paiement d'un client) sont retenues comme transactions entrantes pour le
+// rapprochement — les sorties (achats de crédit, transferts, frais) sont
+// ignorées, hors périmètre du rapprochement facture/paiement.
+// ----------------------------------------------------------------------------
+
+async function extractPdfText(input: File | ArrayBuffer): Promise<string> {
+  const pdfjs = await import('pdfjs-dist');
+  const workerUrl = (await import('pdfjs-dist/build/pdf.worker.min.mjs?url')).default;
+  pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
+
+  const buffer = input instanceof ArrayBuffer ? input : await input.arrayBuffer();
+  const doc = await pdfjs.getDocument({ data: buffer }).promise;
+
+  const pageTexts: string[] = [];
+  for (let pageNum = 1; pageNum <= doc.numPages; pageNum++) {
+    const page = await doc.getPage(pageNum);
+    const content = await page.getTextContent();
+    const pageText = content.items.map((item: any) => ('str' in item ? item.str : '')).join(' ');
+    pageTexts.push(pageText);
+  }
+  return pageTexts.join('\n');
+}
+
+// Motif générique observé sur les relevés MTN MoMo (Ghana/Rwanda) :
+//   <date> <heure> ... <téléphone 8-15 chiffres> ... <montant signé> <ID transaction>
+// Le contenu central (nom, libellé) est capturé de façon permissive.
+const MOMO_LINE_PATTERN =
+  /(\d{1,2}\s+[A-Za-zÀ-ÿ]{3,9}\.?\s+\d{4})\s+(\d{1,2}:\d{2})\s+(.*?)(\d{8,15})(.*?)([+-]\s?[\d.,\s]+\d)\s+(\d{6,})/;
+
+function parseMomoStatementText(
+  rawText: string,
+  defaultChannel: SourceChannel
+): ParseResult<NormalizedTransaction> {
+  const lines = rawText
+    .split(/\n+/)
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+
+  const rows: NormalizedTransaction[] = [];
+  const issues: ParseIssue[] = [];
+
+  lines.forEach((line, idx) => {
+    const match = line.match(MOMO_LINE_PATTERN);
+    if (!match) {
+      return;
+    }
+
+    const [, dateRaw, timeRaw, , phoneRaw, nameRaw, amountRaw, txnId] = match;
+    const amount = parseAmount(amountRaw);
+    const processedAt = parseDateToIso(`${dateRaw} ${timeRaw}`) ?? parseDateToIso(dateRaw);
+
+    if (amount === null) {
+      issues.push({ rowIndex: idx + 1, reason: `Ligne PDF reconnue mais montant illisible : "${line}"` });
+      return;
+    }
+    if (amount <= 0) {
+      return;
+    }
+    if (!processedAt) {
+      issues.push({ rowIndex: idx + 1, reason: `Ligne PDF reconnue mais date illisible : "${line}"` });
+      return;
+    }
+
+    rows.push({
+      reference_api_momo: txnId,
+      source_channel: defaultChannel,
+      sender_phone: phoneRaw ?? null,
+      sender_name: nameRaw?.trim() || null,
+      amount_received: amount,
+      fees: 0,
+      net_amount: amount,
+      processed_at: processedAt,
+    });
+  });
+
+  return { rows, issues, totalRowsInFile: lines.length };
+}
+
+export async function parseTransactionsPdf(
+  input: File | ArrayBuffer,
+  defaultChannel: SourceChannel
+): Promise<ParseResult<NormalizedTransaction>> {
+  const text = await extractPdfText(input);
+  return parseMomoStatementText(text, defaultChannel);
+}

@@ -19,6 +19,7 @@ import {
   parseTransactionsCsv,
   parseTransactionsJson,
   parseTransactionsExcel,
+  parseTransactionsPdf,
   NormalizedInvoice,
   NormalizedTransaction,
   SourceChannel,
@@ -101,9 +102,10 @@ export default function ImportWorkspace() {
       const setList = kind === 'invoice' ? setInvoiceFiles : setTransactionFiles;
       setList((prev) => [...prev, staged]);
 
-      // Seul l'OCR PDF reste non supporté à ce stade (voir chantier suivant).
-      // "other" couvre les extensions inconnues.
-      if (ext === 'pdf' || ext === 'other') {
+      // Les factures DGI/MeCEF en PDF ne sont pas encore supportées (format
+      // certifié différent des relevés opérateurs). "other" couvre les
+      // extensions inconnues.
+      if ((ext === 'pdf' && kind === 'invoice') || ext === 'other') {
         setList((prev) =>
           prev.map((f) =>
             f.id === staged.id
@@ -112,7 +114,7 @@ export default function ImportWorkspace() {
                   status: 'unsupported',
                   errorMessage:
                     ext === 'pdf'
-                      ? "Lecture PDF (OCR) pas encore disponible — exportez la facture en CSV si possible."
+                      ? 'Lecture PDF pour les factures pas encore disponible — exportez en CSV si possible.'
                       : 'Format de fichier non reconnu — utilisez CSV, JSON ou Excel (.xlsx).',
                 }
               : f
@@ -140,7 +142,9 @@ export default function ImportWorkspace() {
         } else {
           const channel = staged.channel ?? 'CASH';
           const result =
-            ext === 'json'
+            ext === 'pdf'
+              ? await parseTransactionsPdf(file, channel)
+              : ext === 'json'
               ? parseTransactionsJson(await file.text())
               : ext === 'xlsx' || ext === 'xls'
               ? await parseTransactionsExcel(file, channel)

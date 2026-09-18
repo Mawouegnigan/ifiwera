@@ -24,6 +24,7 @@
  * la même base. Pour une base de test qu'on veut repartir de zéro, utiliser
  * `docker compose down -v` puis `docker compose up -d` avant de re-migrer.
  */
+require('dotenv/config');
 const { Client } = require('pg');
 const fs = require('fs');
 const path = require('path');

@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { Client } from 'pg';
 
 // globalSetup s'exécute UNE FOIS avant tous les fichiers de la suite, dans un

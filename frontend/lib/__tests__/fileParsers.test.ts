@@ -236,3 +236,4 @@ describe('parseTransactionsExcel', () => {
     expect(result.issues[0].reason).toMatch(/Référence opérateur manquante/);
   });
 });
+
