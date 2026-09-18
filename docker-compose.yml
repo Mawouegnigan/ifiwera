@@ -1,0 +1,25 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ifiwera-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      # Base de développement, créée automatiquement au premier démarrage.
+      # La base "ifiwera_test" (utilisée par la suite de tests réels) est
+      # créée séparément par `npm run db:migrate:test` (voir scripts/migrate.js),
+      # pour ne jamais dépendre d'un script d'init qui ne tourne qu'une fois.
+      POSTGRES_DB: ifiwera
+    ports:
+      - "5433:5432"
+    volumes:
+      - ifiwera_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  ifiwera_pg_data:

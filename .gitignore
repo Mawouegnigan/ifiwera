@@ -1,0 +1,26 @@
+# Dépendances
+node_modules/
+
+# Builds
+backend/dist/
+frontend/dist/
+frontend/build/
+
+# Variables d'environnement réelles (ne jamais committer de vrais identifiants)
+.env
+.env.local
+backend/.env
+backend/.env.local
+
+# Couverture de tests
+backend/coverage/
+
+# Logs
+npm-debug.log*
+*.log
+
+# Éditeurs / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
