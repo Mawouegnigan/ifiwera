@@ -96,8 +96,9 @@ export default function LoginScreen({
           <form onSubmit={handleSubmit} className="space-y-4">
             {mode === 'register' && (
               <div>
-                <label className="block text-xs text-[#9FB0A9] mb-1.5">Nom de l'entreprise</label>
+                <label htmlFor="companyName" className="block text-xs text-[#9FB0A9] mb-1.5">Nom de l'entreprise</label>
                 <input
+                  id="companyName"
                   type="text"
                   required
                   value={companyName}
@@ -109,8 +110,9 @@ export default function LoginScreen({
             )}
 
             <div>
-              <label className="block text-xs text-[#9FB0A9] mb-1.5">Email</label>
+              <label htmlFor="email" className="block text-xs text-[#9FB0A9] mb-1.5">Email</label>
               <input
+                id="email"
                 type="email"
                 required
                 value={email}
@@ -121,8 +123,9 @@ export default function LoginScreen({
             </div>
 
             <div>
-              <label className="block text-xs text-[#9FB0A9] mb-1.5">Mot de passe</label>
+              <label htmlFor="password" className="block text-xs text-[#9FB0A9] mb-1.5">Mot de passe</label>
               <input
+                id="password"
                 type="password"
                 required
                 minLength={8}
@@ -135,8 +138,9 @@ export default function LoginScreen({
 
             {mode === 'register' && (
               <div>
-                <label className="block text-xs text-[#9FB0A9] mb-1.5">Confirmer le mot de passe</label>
+                <label htmlFor="confirmPassword" className="block text-xs text-[#9FB0A9] mb-1.5">Confirmer le mot de passe</label>
                 <input
+                  id="confirmPassword"
                   type="password"
                   required
                   minLength={8}

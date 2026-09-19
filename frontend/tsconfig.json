@@ -13,5 +13,5 @@
     "strict": true,
     "esModuleInterop": true
   },
-  "include": ["*.ts", "*.tsx", "lib/**/*.ts", "lib/**/*.tsx"]
+  "include": ["*.ts", "*.tsx", "lib/**/*.ts", "lib/**/*.tsx", "__tests__/**/*.ts", "__tests__/**/*.tsx"]
 }
